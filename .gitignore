@@ -1,4 +1,5 @@
 bin/
 .claude
+.env
 rpi-exporter
 

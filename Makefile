@@ -1,4 +1,7 @@
 .PHONY: ⚙
+SHELL := bash
+
+export GITEA_TOKEN := $(shell source .env; echo $$GITEA_TOKEN)
 
 RPI_HOST   ?= pi400
 RPI_USER   ?= uwe
@@ -21,10 +24,13 @@ build-stub: ⚙  ## build vcgencmd stub for local testing
 test: ⚙ build-stub  ## run tests locally with vcgencmd stub
 	PATH="$(CURDIR)/bin:$(PATH)" go test -race ./...
 
+.env:
+	touch .env
+
 snapshot: ⚙  ## build release archives for all platforms (no git tag required)
 	goreleaser build --snapshot --clean
 
-release: ⚙  ## build and publish a release (requires a git tag and remote)
+release: ⚙ .env  ## build and publish a release (requires a git tag and GITEA_TOKEN in .env)
 	goreleaser release --clean
 
 build: ⚙  ## cross-compile binary and test binary for arm64/linux
