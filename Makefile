@@ -7,7 +7,8 @@ RPI_HOST   ?= pi400
 RPI_USER   ?= uwe
 
 addr       = $(RPI_USER)@$(RPI_HOST)
-query_addr = http://$(RPI_HOST):9101/metrics
+query_addr      = http://$(RPI_HOST):9101/metrics
+node_query_addr = http://$(RPI_HOST):9100/metrics
 upload_dir = /home/$(RPI_USER)/Downloads
 run        = ssh -q $(addr)
 srcbin     = bin/rpi-exporter
@@ -62,6 +63,9 @@ uninstall-plugin: ⚙ upload  ## uninstall rpi-exporter systemd timer plugin
 
 query: ⚙  ## query metrics endpoint on the Pi (standalone server mode)
 	curl -k $(query_addr)
+
+query-node: ⚙  ## query rpi metrics from node_exporter on the Pi (port 9100)
+	curl -sk $(node_query_addr) | grep '^rpi_'
 
 query-plugin: ⚙  ## query rpi metrics from node_exporter textfile output on the Pi
 	$(run) grep '^rpi_' /var/lib/prometheus/node-exporter/rpi.prom

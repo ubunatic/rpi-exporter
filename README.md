@@ -34,9 +34,22 @@ Writes metrics to the node_exporter textfile directory and exits. Use `-textfile
 
 ## Installation
 
-Requires a Raspberry Pi with `vcgencmd` available. Cross-compile for arm64 with `make build`, then upload and install via `make install` or `make install-plugin`.
+Requires a Raspberry Pi with `vcgencmd` available.
 
-### Standalone systemd service
+### Via `go install` (on the Pi)
+
+```sh
+go install ubunatic.com/rpi-exporter/cmd/rpi-exporter@latest
+
+# sudo is required since ~/go/bin is not in sudo's PATH
+# use the full path or a relative path from your home directory
+sudo ~/go/bin/rpi-exporter -install-plugin   # systemd timer (node_exporter plugin)
+sudo ~/go/bin/rpi-exporter -install          # standalone systemd service
+```
+
+### Via Makefile (cross-compile from a dev machine)
+
+Cross-compiles for arm64, uploads to the Pi, and installs.
 
 ```sh
 make install           # build, upload, install as rpi-exporter.service
@@ -59,7 +72,8 @@ make test              # run tests locally using a vcgencmd stub
 make build             # cross-compile for arm64/linux
 make upload            # build and upload binaries to the Pi (RPI_HOST=pi400 RPI_USER=uwe)
 make test-uploads      # build, upload, and run tests on the Pi
-make query             # curl the metrics endpoint on the Pi
+make query             # curl the metrics endpoint on the Pi (port 9101)
+make query-node        # grep rpi_ metrics from node_exporter on the Pi (port 9100)
 make query-plugin      # grep rpi_ metrics from textfile output on the Pi
 ```
 
