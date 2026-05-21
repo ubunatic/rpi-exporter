@@ -1,5 +1,6 @@
 bin/
-.claude
+dist/
+.claude/
 .env
-rpi-exporter
+/rpi-exporter
 
