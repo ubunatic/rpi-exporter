@@ -1,0 +1,42 @@
+#!/bin/sh
+# Fetch and filter node exporter metrics, stripping common runtime noise.
+HOST=${1:-pi400}
+PORT=9100
+
+filter() {
+  grep -v '^#' \
+  | grep -v '^apt' \
+  | grep -v '^go' \
+  | grep -v '^process' \
+  | grep -v '^promhttp' \
+  | grep -v '^smartmon' \
+  | grep -v '^node_nf' \
+  | grep -v '^node_filesystem' \
+  | grep -v '^node_filefd' \
+  | grep -v '^node_memory' \
+  | grep -v '^node_procs' \
+  | grep -v '^node_load' \
+  | grep -v '^node_entropy' \
+  | grep -v '^node_context' \
+  | grep -v '^node_selinux' \
+  | grep -v '^node_disk' \
+  | grep -v '^node_timex' \
+  | grep -v '^node_time' \
+  | grep -v '^node_cpu' \
+  | grep -v '^node_scrape_collector' \
+  | grep -v '^node_netstat' \
+  | grep -v '^node_schedstat' \
+  | grep -v '^node_softnet' \
+  | grep -v '^node_sockstat' \
+  | grep -v '^node_network' \
+  | grep -v '^node_udp' \
+  | grep -v '^node_vmstat' \
+  | grep -v '^node_textfile' \
+  | grep -v '^node_systemd'
+}
+
+if curl -sf --max-time 3 "http://$HOST:$PORT/metrics" -o /dev/null 2>/dev/null
+then curl -s "http://$HOST:$PORT/metrics" | filter
+else echo "# direct curl failed, falling back to ssh" >&2
+     ssh -q "$HOST" curl -s "http://localhost:$PORT/metrics" | filter
+fi
