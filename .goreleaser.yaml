@@ -1,0 +1,53 @@
+version: 2
+
+project_name: rpi-exporter
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: rpi-exporter
+    main: ./cmd/rpi-exporter
+    binary: rpi-exporter
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - arm64
+      - arm
+    goarm:
+      - "6"
+      - "7"
+
+archives:
+  - id: rpi-exporter
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+gitea_urls:
+  api: https://codeberg.org/api/v1/
+  download: https://codeberg.org
+
+release:
+  gitea:
+    owner: ubunatic
+    name: rpi-exporter
+  draft: true

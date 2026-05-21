@@ -21,6 +21,12 @@ build-stub: ⚙  ## build vcgencmd stub for local testing
 test: ⚙ build-stub  ## run tests locally with vcgencmd stub
 	PATH="$(CURDIR)/bin:$(PATH)" go test -race ./...
 
+snapshot: ⚙  ## build release archives for all platforms (no git tag required)
+	goreleaser build --snapshot --clean
+
+release: ⚙  ## build and publish a release (requires a git tag and remote)
+	goreleaser release --clean
+
 build: ⚙  ## cross-compile binary and test binary for arm64/linux
 	GOARCH=arm64 GOOS=linux go build   -o "$(srcbin)"  ./cmd/rpi-exporter
 	GOARCH=arm64 GOOS=linux go test -c -o "$(testbin)" ./collector/...
