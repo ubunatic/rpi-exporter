@@ -22,7 +22,7 @@ test: ⚙ build-stub  ## run tests locally with vcgencmd stub
 	PATH="$(CURDIR)/bin:$(PATH)" go test -race ./...
 
 build: ⚙  ## cross-compile binary and test binary for arm64/linux
-	GOARCH=arm64 GOOS=linux go build   -o "$(srcbin)"  ./cmd/main.go
+	GOARCH=arm64 GOOS=linux go build   -o "$(srcbin)"  ./cmd/rpi-exporter
 	GOARCH=arm64 GOOS=linux go test -c -o "$(testbin)" ./collector/...
 
 upload: ⚙ build  ## upload binaries to Raspberry Pi
