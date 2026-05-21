@@ -13,11 +13,21 @@ import (
 //go:embed service.ini
 var serviceIni []byte
 
+//go:embed plugin.service
+var pluginServiceIni []byte
+
+//go:embed plugin.timer
+var pluginTimerIni []byte
+
 const (
-	installPrefix  = "/usr/local"
-	serviceName    = "rpi-exporter"
-	binDest        = installPrefix + "/bin/" + serviceName
-	unitDest       = "/etc/systemd/system/" + serviceName + ".service"
+	installPrefix = "/usr/local"
+	serviceName   = "rpi-exporter"
+	binDest       = installPrefix + "/bin/" + serviceName
+	unitDest      = "/etc/systemd/system/" + serviceName + ".service"
+
+	pluginName        = "rpi-exporter-plugin"
+	pluginUnitDest    = "/etc/systemd/system/" + pluginName + ".service"
+	pluginTimerDest   = "/etc/systemd/system/" + pluginName + ".timer"
 )
 
 func Install() error {
@@ -71,9 +81,81 @@ func Uninstall() error {
 		_ = runSystemctl(args...) // best-effort
 	}
 	_ = os.Remove(unitDest)
-	_ = os.Remove(binDest)
-	slog.Info("uninstalled", "binary", binDest, "unit", unitDest)
+	removeBinary(pluginUnitDest)
+	slog.Info("uninstalled", "unit", unitDest)
 	return nil
+}
+
+func InstallPlugin() error {
+	if !collector.IsRpi() {
+		return fmt.Errorf("cannot install on non-RPi system")
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not resolve current binary: %w", err)
+	}
+	data, err := os.ReadFile(self)
+	if err != nil {
+		return fmt.Errorf("could not read binary %s: %w", self, err)
+	}
+
+	_ = runSystemctl("stop", pluginName+".timer")
+	_ = runSystemctl("stop", pluginName+".service")
+
+	if err := os.MkdirAll(installPrefix+"/bin", 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(binDest, data, 0755); err != nil {
+		return fmt.Errorf("could not write binary to %s: %w", binDest, err)
+	}
+	slog.Info("installed binary", "path", binDest)
+
+	if err := os.WriteFile(pluginUnitDest, pluginServiceIni, 0644); err != nil {
+		return fmt.Errorf("could not write unit to %s: %w", pluginUnitDest, err)
+	}
+	slog.Info("wrote unit file", "path", pluginUnitDest)
+
+	if err := os.WriteFile(pluginTimerDest, pluginTimerIni, 0644); err != nil {
+		return fmt.Errorf("could not write timer to %s: %w", pluginTimerDest, err)
+	}
+	slog.Info("wrote timer file", "path", pluginTimerDest)
+
+	for _, args := range [][]string{
+		{"daemon-reload"},
+		{"enable", pluginName + ".timer"},
+		{"start", pluginName + ".timer"},
+	} {
+		if err := runSystemctl(args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func UninstallPlugin() error {
+	for _, args := range [][]string{
+		{"stop", pluginName + ".timer"},
+		{"disable", pluginName + ".timer"},
+		{"daemon-reload"},
+	} {
+		_ = runSystemctl(args...)
+	}
+	_ = os.Remove(pluginUnitDest)
+	_ = os.Remove(pluginTimerDest)
+	removeBinary(unitDest)
+	slog.Info("uninstalled plugin", "unit", pluginUnitDest, "timer", pluginTimerDest)
+	return nil
+}
+
+// removeBinary removes the shared binary only when otherUnit is no longer installed.
+func removeBinary(otherUnit string) {
+	if _, err := os.Stat(otherUnit); os.IsNotExist(err) {
+		_ = os.Remove(binDest)
+		slog.Info("removed binary", "path", binDest)
+	} else {
+		slog.Info("keeping binary, other unit still installed", "path", binDest, "unit", otherUnit)
+	}
 }
 
 func runSystemctl(args ...string) error {

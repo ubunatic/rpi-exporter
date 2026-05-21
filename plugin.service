@@ -1,0 +1,6 @@
+[Unit]
+Description=Raspberry Pi Exporter (textfile collector write)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rpi-exporter -plugin

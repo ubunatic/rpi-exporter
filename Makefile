@@ -1,6 +1,6 @@
 .PHONY: ⚙
 
-RPI_HOST   ?= pi4
+RPI_HOST   ?= pi400
 RPI_USER   ?= uwe
 
 addr       = $(RPI_USER)@$(RPI_HOST)
@@ -42,5 +42,14 @@ install: ⚙ upload  ## install rpi-exporter as a systemd service on the Pi
 uninstall: ⚙ upload  ## uninstall rpi-exporter systemd service from the Pi
 	$(run) sudo $(upload_dir)/$(name) -uninstall
 
-query: ⚙  ## query metrics endpoint on the Pi
+install-plugin: ⚙ upload  ## install rpi-exporter as a systemd timer (textfile plugin for node_exporter)
+	$(run) sudo $(upload_dir)/$(name) -install-plugin
+
+uninstall-plugin: ⚙ upload  ## uninstall rpi-exporter systemd timer plugin
+	$(run) sudo $(upload_dir)/$(name) -uninstall-plugin
+
+query: ⚙  ## query metrics endpoint on the Pi (standalone server mode)
 	curl -k $(query_addr)
+
+query-plugin: ⚙  ## query rpi metrics from node_exporter textfile output on the Pi
+	$(run) grep '^rpi_' /var/lib/prometheus/node-exporter/rpi.prom
