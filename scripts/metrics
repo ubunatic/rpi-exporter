@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 Uwe Jugel <uwe@ubunatic.com>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 # Fetch and filter node exporter metrics, stripping common runtime noise.
 HOST=${1:-pi400}
 PORT=9100

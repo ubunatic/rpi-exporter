@@ -53,3 +53,6 @@ query: ⚙  ## query metrics endpoint on the Pi (standalone server mode)
 
 query-plugin: ⚙  ## query rpi metrics from node_exporter textfile output on the Pi
 	$(run) grep '^rpi_' /var/lib/prometheus/node-exporter/rpi.prom
+
+reuse: ⚙  ## check REUSE/SPDX license compliance
+	reuse lint

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Uwe Jugel <uwe@ubunatic.com>
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // vcgencmd-stub mimics the vcgencmd tool for local testing on non-RPi systems.
 package main
 
