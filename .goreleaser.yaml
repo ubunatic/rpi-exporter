@@ -29,6 +29,25 @@ archives:
       - tar.gz
     name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
 
+nfpms:
+  - id: rpi-exporter
+    package_name: rpi-exporter
+    file_name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    homepage: https://codeberg.org/ubunatic/rpi-exporter
+    maintainer: Uwe Jugel <uwe@ubunatic.com>
+    description: A Prometheus exporter for Raspberry Pi hardware metrics via vcgencmd.
+    license: AGPL-3.0-or-later
+    formats:
+      - deb
+    bindir: /usr/bin
+    contents:
+      - src: service.ini
+        dst: /lib/systemd/system/rpi-exporter.service
+      - src: plugin.service
+        dst: /lib/systemd/system/rpi-exporter-plugin.service
+      - src: plugin.timer
+        dst: /lib/systemd/system/rpi-exporter-plugin.timer
+
 checksum:
   name_template: checksums.txt
 
