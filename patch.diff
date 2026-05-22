@@ -1,0 +1,36 @@
+--- collector/commands.go
++++ collector/commands.go
+@@ -118,32 +118,10 @@
+
+ // GetMemory runs vcgencmd get_mem for a given memory ID and returns the memory in Bytes.
+ func GetMemory(id string) (float64, error) {
+-<<<<<<< HEAD
+	re := regexp.MustCompile(fmt.Sprintf(`%s=(\d+)M`, regexp.QuoteMeta(id)))
+	return parseVCGenCmdFloat(fmt.Sprintf("memory for %s", id), re, func(s string) (float64, error) {
+		memMB, err := strconv.ParseFloat(s, 64)
+		return memMB * 1024 * 1024, err
+	}, "get_mem", id)
+-=======
+-	output, err := runVCGenCmd("get_mem", id)
+-	if err != nil {
+-		return 0, err
+-	}
+-
+-	// Example output: arm=512M
+-	prefix := id + "="
+-	if !strings.HasPrefix(output, prefix) || !strings.HasSuffix(output, "M") {
+-		return 0, fmt.Errorf("could not parse memory for %s from output: %s", id, output)
+-	}
+-
+-	memStr := strings.TrimPrefix(output, prefix)
+-	memStr = strings.TrimSuffix(memStr, "M")
+-
+-	// Memory is reported in MB, convert to Bytes
+-	memMB, err := strconv.ParseFloat(memStr, 64)
+-	if err != nil {
+-		return 0, fmt.Errorf("could not parse float from memory string '%s': %w", memStr, err)
+-	}
+-
+-	return memMB * 1024 * 1024, nil // Convert MB to Bytes
+->>>>>>> origin/main
+ }
