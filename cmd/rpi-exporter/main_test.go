@@ -31,22 +31,34 @@ func TestRun_RpiFlag(t *testing.T) {
 }
 
 func TestRun_Install(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("Skipping destructive test run as root")
+	}
 	exitCode := run([]string{"-install"})
 	// returns 0 or 1 depending on whether it failed, both are acceptable execution paths
 	assert.Contains(t, []int{0, 1}, exitCode)
 }
 
 func TestRun_Uninstall(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("Skipping destructive test run as root")
+	}
 	exitCode := run([]string{"-uninstall"})
 	assert.Contains(t, []int{0, 1}, exitCode)
 }
 
 func TestRun_InstallPlugin(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("Skipping destructive test run as root")
+	}
 	exitCode := run([]string{"-install-plugin"})
 	assert.Contains(t, []int{0, 1}, exitCode)
 }
 
 func TestRun_UninstallPlugin(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("Skipping destructive test run as root")
+	}
 	exitCode := run([]string{"-uninstall-plugin"})
 	assert.Contains(t, []int{0, 1}, exitCode)
 }

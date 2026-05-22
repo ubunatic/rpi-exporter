@@ -54,6 +54,7 @@ func TestRun_UninstallPlugin(t *testing.T) {
 func TestRun_Plugin_Stdout(t *testing.T) {
 	// Capture stdout
 	oldStdout := os.Stdout
+	defer func() { os.Stdout = oldStdout }()
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
@@ -62,7 +63,6 @@ func TestRun_Plugin_Stdout(t *testing.T) {
 
 	// Restore stdout
 	w.Close()
-	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
 	io.Copy(&buf, r)
@@ -80,6 +80,8 @@ func TestRun_Plugin_InvalidPath(t *testing.T) {
 
 func TestRun_Listen_InvalidPort(t *testing.T) {
 	// Suppress slog output for this test to avoid polluting test logs with error
+	oldLogger := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(oldLogger) })
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	exitCode := run([]string{"-port", "invalid-port"})
