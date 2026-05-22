@@ -20,13 +20,13 @@ import (
 var version = "dev"
 
 func main() {
-	port            := flag.String("port", ":9101", "Port to listen on")
-	rpi             := flag.Bool("rpi", false, "Check if running on a Raspberry Pi and exit")
-	install         := flag.Bool("install", false, "Install rpi-exporter as a systemd service")
-	uninstall       := flag.Bool("uninstall", false, "Uninstall rpi-exporter systemd service")
-	plugin          := flag.Bool("plugin", false, "Write metrics to textfile collector and exit")
-	textfile        := flag.String("textfile", rpiexporter.TextfilePath, "Textfile collector output path (used with -plugin; use - for stdout)")
-	installPlugin   := flag.Bool("install-plugin", false, "Install rpi-exporter as a systemd timer (textfile plugin)")
+	port := flag.String("port", ":9101", "Port to listen on")
+	rpi := flag.Bool("rpi", false, "Check if running on a Raspberry Pi and exit")
+	install := flag.Bool("install", false, "Install rpi-exporter as a systemd service")
+	uninstall := flag.Bool("uninstall", false, "Uninstall rpi-exporter systemd service")
+	plugin := flag.Bool("plugin", false, "Write metrics to textfile collector and exit")
+	textfile := flag.String("textfile", rpiexporter.TextfilePath, "Textfile collector output path (used with -plugin; use - for stdout)")
+	installPlugin := flag.Bool("install-plugin", false, "Install rpi-exporter as a systemd timer (textfile plugin)")
 	uninstallPlugin := flag.Bool("uninstall-plugin", false, "Uninstall rpi-exporter systemd timer plugin")
 	flag.Parse()
 

@@ -57,6 +57,14 @@ func runVCGenCmd(args ...string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+var (
+	voltageRe     = regexp.MustCompile(`volt=(\d+\.?\d*)V`)
+	throttledRe   = regexp.MustCompile(`throttled=(0x[0-9a-fA-F]+)`)
+	temperatureRe = regexp.MustCompile(`temp=(\d+\.?\d*)'C`)
+	clockRe       = regexp.MustCompile(`frequency\(\d+\)=(\d+)`)
+	resetReasonRe = regexp.MustCompile(`get_rsts=(\d+)`)
+)
+
 // GetVoltage runs vcgencmd measure_volts for a given port and returns the voltage.
 func GetVoltage(port string) (float64, error) {
 	output, err := runVCGenCmd("measure_volts", port)
@@ -65,8 +73,7 @@ func GetVoltage(port string) (float64, error) {
 	}
 
 	// Example output: volt=1.2000V
-	re := regexp.MustCompile(`volt=(\d+\.?\d*)V`)
-	matches := re.FindStringSubmatch(output)
+	matches := voltageRe.FindStringSubmatch(output)
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse voltage from output: %s", output)
 	}
@@ -88,8 +95,7 @@ func GetThrottledStatus() (float64, error) {
 	}
 
 	// Example output: throttled=0x0
-	re := regexp.MustCompile(`throttled=(0x[0-9a-fA-F]+)`)
-	matches := re.FindStringSubmatch(output)
+	matches := throttledRe.FindStringSubmatch(output)
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse throttled status from output: %s", output)
 	}
@@ -112,8 +118,7 @@ func GetTemperature() (float64, error) {
 	}
 
 	// Example output: temp=45.0'C
-	re := regexp.MustCompile(`temp=(\d+\.?\d*)'C`)
-	matches := re.FindStringSubmatch(output)
+	matches := temperatureRe.FindStringSubmatch(output)
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse temperature from output: %s", output)
 	}
@@ -135,8 +140,7 @@ func GetClock(id string) (float64, error) {
 	}
 
 	// Example output: frequency(48)=900228544
-	re := regexp.MustCompile(`frequency\(\d+\)=(\d+)`)
-	matches := re.FindStringSubmatch(output)
+	matches := clockRe.FindStringSubmatch(output)
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse clock frequency for %s from output: %s", id, output)
 	}
@@ -158,13 +162,14 @@ func GetMemory(id string) (float64, error) {
 	}
 
 	// Example output: arm=512M
-	re := regexp.MustCompile(fmt.Sprintf(`%s=(\d+)M`, regexp.QuoteMeta(id)))
-	matches := re.FindStringSubmatch(output)
-	if len(matches) < 2 {
+	prefix := id + "="
+	if !strings.HasPrefix(output, prefix) || !strings.HasSuffix(output, "M") {
 		return 0, fmt.Errorf("could not parse memory for %s from output: %s", id, output)
 	}
 
-	memStr := matches[1]
+	memStr := strings.TrimPrefix(output, prefix)
+	memStr = strings.TrimSuffix(memStr, "M")
+
 	// Memory is reported in MB, convert to Bytes
 	memMB, err := strconv.ParseFloat(memStr, 64)
 	if err != nil {
@@ -182,8 +187,7 @@ func GetResetReason() (float64, error) {
 	}
 
 	// Example output: get_rsts=1000
-	re := regexp.MustCompile(`get_rsts=(\d+)`)
-	matches := re.FindStringSubmatch(output)
+	matches := resetReasonRe.FindStringSubmatch(output)
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse reset reason from output: %s", output)
 	}
