@@ -54,3 +54,9 @@ func TestIsRpi(t *testing.T) {
 	v := collector.IsRpi()
 	t.Log("IsRpi:", v)
 }
+
+func BenchmarkGetResetReason(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, _ = collector.GetResetReason()
+	}
+}
