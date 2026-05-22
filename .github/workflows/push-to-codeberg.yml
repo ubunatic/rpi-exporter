@@ -1,0 +1,42 @@
+name: Push to Codeberg
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to push'
+        required: true
+        default: 'develop'
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+          fetch-depth: 0
+
+      - name: Verify branch is not main
+        env:
+          BRANCH: ${{ github.event.inputs.branch }}
+        run: |
+          if [ "$BRANCH" = "main" ]; then
+            echo "Error: Cannot push main branch to codeberg"
+            exit 1
+          fi
+
+      - name: Push to Codeberg
+        env:
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+          BRANCH: ${{ github.event.inputs.branch }}
+        run: |
+          # Add the Codeberg remote
+          # We assume the repo is configured as secrets.CODEBERG_REPO_URL or similar
+          # For now, using a generic URL structure that would typically rely on a secret
+          # e.g., https://username:${CODEBERG_TOKEN}@codeberg.org/username/repo.git
+          git remote add codeberg https://oauth2:${CODEBERG_TOKEN}@codeberg.org/${{ github.repository }}.git
+
+          # Push the specific branch, ensuring local and remote match
+          git push codeberg HEAD:refs/heads/"$BRANCH"
