@@ -22,6 +22,15 @@ var systemLock = &sync.Mutex{}
 var isRpi = atomic.Bool{}
 var once = sync.Once{}
 
+var (
+	voltRe      = regexp.MustCompile(`volt=(\d+\.?\d*)V`)
+	throttledRe = regexp.MustCompile(`throttled=(0x[0-9a-fA-F]+)`)
+	tempRe      = regexp.MustCompile(`temp=(\d+\.?\d*)'C`)
+	clockRe     = regexp.MustCompile(`frequency\(\d+\)=(\d+)`)
+	memRe       = regexp.MustCompile(`=(\d+)M`)
+	rstsRe      = regexp.MustCompile(`get_rsts=(\d+)`)
+)
+
 // best-effort check if we use a pi or not
 func IsRpi() bool {
 	once.Do(func() {
@@ -73,7 +82,11 @@ func GetVoltage(port string) (float64, error) {
 	}
 
 	// Example output: volt=1.2000V
+<<<<<<< HEAD
+	matches := voltRe.FindStringSubmatch(output)
+=======
 	matches := voltageRe.FindStringSubmatch(output)
+>>>>>>> origin/main
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse voltage from output: %s", output)
 	}
@@ -118,7 +131,11 @@ func GetTemperature() (float64, error) {
 	}
 
 	// Example output: temp=45.0'C
+<<<<<<< HEAD
+	matches := tempRe.FindStringSubmatch(output)
+=======
 	matches := temperatureRe.FindStringSubmatch(output)
+>>>>>>> origin/main
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse temperature from output: %s", output)
 	}
@@ -162,8 +179,16 @@ func GetMemory(id string) (float64, error) {
 	}
 
 	// Example output: arm=512M
+<<<<<<< HEAD
+	if !strings.HasPrefix(output, id+"=") {
+		return 0, fmt.Errorf("could not parse memory for %s from output: %s", id, output)
+	}
+	matches := memRe.FindStringSubmatch(output)
+	if len(matches) < 2 {
+=======
 	prefix := id + "="
 	if !strings.HasPrefix(output, prefix) || !strings.HasSuffix(output, "M") {
+>>>>>>> origin/main
 		return 0, fmt.Errorf("could not parse memory for %s from output: %s", id, output)
 	}
 
@@ -187,7 +212,11 @@ func GetResetReason() (float64, error) {
 	}
 
 	// Example output: get_rsts=1000
+<<<<<<< HEAD
+	matches := rstsRe.FindStringSubmatch(output)
+=======
 	matches := resetReasonRe.FindStringSubmatch(output)
+>>>>>>> origin/main
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse reset reason from output: %s", output)
 	}
