@@ -29,9 +29,9 @@ const (
 	binDest       = installPrefix + "/bin/" + serviceName
 	unitDest      = "/etc/systemd/system/" + serviceName + ".service"
 
-	pluginName        = "rpi-exporter-plugin"
-	pluginUnitDest    = "/etc/systemd/system/" + pluginName + ".service"
-	pluginTimerDest   = "/etc/systemd/system/" + pluginName + ".timer"
+	pluginName      = "rpi-exporter-plugin"
+	pluginUnitDest  = "/etc/systemd/system/" + pluginName + ".service"
+	pluginTimerDest = "/etc/systemd/system/" + pluginName + ".timer"
 )
 
 func Install() error {
