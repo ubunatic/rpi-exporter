@@ -22,14 +22,6 @@ var systemLock = &sync.Mutex{}
 var isRpi = atomic.Bool{}
 var once = sync.Once{}
 
-var (
-	reVoltage   = regexp.MustCompile(`volt=(\d+\.?\d*)V`)
-	reThrottled = regexp.MustCompile(`throttled=(0x[0-9a-fA-F]+)`)
-	reTemp      = regexp.MustCompile(`temp=(\d+\.?\d*)'C`)
-	reClock     = regexp.MustCompile(`frequency\(\d+\)=(\d+)`)
-	reRsts      = regexp.MustCompile(`get_rsts=(\d+)`)
-)
-
 // best-effort check if we use a pi or not
 func IsRpi() bool {
 	once.Do(func() {
@@ -65,6 +57,14 @@ func runVCGenCmd(args ...string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+var (
+	voltageRe     = regexp.MustCompile(`volt=(\d+\.?\d*)V`)
+	throttledRe   = regexp.MustCompile(`throttled=(0x[0-9a-fA-F]+)`)
+	temperatureRe = regexp.MustCompile(`temp=(\d+\.?\d*)'C`)
+	clockRe       = regexp.MustCompile(`frequency\(\d+\)=(\d+)`)
+	resetReasonRe = regexp.MustCompile(`get_rsts=(\d+)`)
+)
+
 // GetVoltage runs vcgencmd measure_volts for a given port and returns the voltage.
 func GetVoltage(port string) (float64, error) {
 	output, err := runVCGenCmd("measure_volts", port)
@@ -73,7 +73,8 @@ func GetVoltage(port string) (float64, error) {
 	}
 
 	// Example output: volt=1.2000V
-	matches := reVoltage.FindStringSubmatch(output)
+	matches := voltageRe.FindStringSubmatch(output)
+
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse voltage from output: %s", output)
 	}
@@ -95,7 +96,8 @@ func GetThrottledStatus() (float64, error) {
 	}
 
 	// Example output: throttled=0x0
-	matches := reThrottled.FindStringSubmatch(output)
+	matches := throttledRe.FindStringSubmatch(output)
+
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse throttled status from output: %s", output)
 	}
@@ -118,7 +120,8 @@ func GetTemperature() (float64, error) {
 	}
 
 	// Example output: temp=45.0'C
-	matches := reTemp.FindStringSubmatch(output)
+	matches := temperatureRe.FindStringSubmatch(output)
+
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse temperature from output: %s", output)
 	}
@@ -140,7 +143,8 @@ func GetClock(id string) (float64, error) {
 	}
 
 	// Example output: frequency(48)=900228544
-	matches := reClock.FindStringSubmatch(output)
+	matches := clockRe.FindStringSubmatch(output)
+
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse clock frequency for %s from output: %s", id, output)
 	}
@@ -164,6 +168,7 @@ func GetMemory(id string) (float64, error) {
 	// Example output: arm=512M
 	prefix := id + "="
 	output = strings.TrimSpace(output)
+
 	if !strings.HasPrefix(output, prefix) || !strings.HasSuffix(output, "M") {
 		return 0, fmt.Errorf("could not parse memory for %s from output: %s", id, output)
 	}
@@ -188,7 +193,8 @@ func GetResetReason() (float64, error) {
 	}
 
 	// Example output: get_rsts=1000
-	matches := reRsts.FindStringSubmatch(output)
+	matches := resetReasonRe.FindStringSubmatch(output)
+
 	if len(matches) < 2 {
 		return 0, fmt.Errorf("could not parse reset reason from output: %s", output)
 	}

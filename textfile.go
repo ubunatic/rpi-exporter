@@ -26,14 +26,24 @@ func WriteTextfile(path string, g prometheus.Gatherer) error {
 	if path == "-" {
 		return encodeText(os.Stdout, mfs)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+
+	base := filepath.Base(path)
+	f, err := os.CreateTemp(dir, base+".*.tmp")
 	if err != nil {
 		return err
 	}
+	tmp := f.Name()
+
+	if err := f.Chmod(0644); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+
 	if err := encodeText(f, mfs); err != nil {
 		f.Close()
 		os.Remove(tmp)
