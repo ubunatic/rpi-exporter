@@ -12,7 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // mockGatherer implements prometheus.Gatherer for testing
@@ -26,7 +29,7 @@ func (m *mockGatherer) Gather() ([]*dto.MetricFamily, error) {
 }
 
 func TestWriteTextfile(t *testing.T) {
-	// Create some dummy metrics
+	// Dummy metrics for more complex edge case testing
 	metricName := "test_metric"
 	metricHelp := "test metric help"
 	metricType := dto.MetricType_GAUGE
@@ -47,31 +50,35 @@ func TestWriteTextfile(t *testing.T) {
 		},
 	}
 
-	t.Run("success_file", func(t *testing.T) {
+	t.Run("success_file_real_registry", func(t *testing.T) {
 		tempDir := t.TempDir()
-		path := filepath.Join(tempDir, "metrics.prom")
+		path := filepath.Join(tempDir, "test.prom")
 
-		g := &mockGatherer{mfs: mfs}
-		err := WriteTextfile(path, g)
-		if err != nil {
-			t.Fatalf("WriteTextfile failed: %v", err)
-		}
+		registry := prometheus.NewRegistry()
+		counter := prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "test_counter",
+			Help: "A test counter",
+		})
+		counter.Inc()
+		registry.MustRegister(counter)
+
+		err := WriteTextfile(path, registry)
+		require.NoError(t, err)
+
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+
+		// Ensure permissions are 0644
+		assert.Equal(t, os.FileMode(0644), info.Mode().Perm())
 
 		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("Failed to read output file: %v", err)
-		}
-
-		expectedContent := "# HELP test_metric test metric help\n# TYPE test_metric gauge\ntest_metric 42\n"
-		if string(content) != expectedContent {
-			t.Errorf("Unexpected output file content.\nGot: %q\nWant: %q", string(content), expectedContent)
-		}
+		require.NoError(t, err)
+		assert.Contains(t, string(content), "test_counter 1")
 
 		// Verify tmp file was removed
-		tmpPath := path + ".tmp"
-		if _, err := os.Stat(tmpPath); !os.IsNotExist(err) {
-			t.Errorf("Temp file %s still exists", tmpPath)
-		}
+		matches, err := filepath.Glob(path + ".*.tmp")
+		require.NoError(t, err)
+		assert.Empty(t, matches, "Temp files should have been removed")
 	})
 
 	t.Run("success_stdout", func(t *testing.T) {
@@ -87,16 +94,12 @@ func TestWriteTextfile(t *testing.T) {
 		w.Close()
 		os.Stdout = oldStdout
 
-		if err != nil {
-			t.Fatalf("WriteTextfile failed: %v", err)
-		}
+		require.NoError(t, err, "WriteTextfile failed")
 
 		out, _ := io.ReadAll(r)
 		expectedContent := "# HELP test_metric test metric help\n# TYPE test_metric gauge\ntest_metric 42\n"
 
-		if string(out) != expectedContent {
-			t.Errorf("Unexpected stdout content.\nGot: %q\nWant: %q", string(out), expectedContent)
-		}
+		assert.Equal(t, expectedContent, string(out), "Unexpected stdout content")
 	})
 
 	t.Run("error_gather", func(t *testing.T) {
@@ -105,47 +108,44 @@ func TestWriteTextfile(t *testing.T) {
 
 		err := WriteTextfile("dummy.prom", g)
 
-		if err != expectedErr {
-			t.Errorf("Expected error %v, got %v", expectedErr, err)
-		}
+		assert.Equal(t, expectedErr, err)
 	})
 
 	t.Run("error_mkdir", func(t *testing.T) {
 		tempDir := t.TempDir()
 		// Create a file where a directory would need to be created
 		conflictPath := filepath.Join(tempDir, "conflict")
-		if err := os.WriteFile(conflictPath, []byte("test"), 0644); err != nil {
-			t.Fatalf("Failed to create conflict file: %v", err)
-		}
+		err := os.WriteFile(conflictPath, []byte("test"), 0644)
+		require.NoError(t, err, "Failed to create conflict file")
 
 		path := filepath.Join(conflictPath, "metrics.prom")
 
 		g := &mockGatherer{mfs: mfs}
-		err := WriteTextfile(path, g)
+		err = WriteTextfile(path, g)
 
-		if err == nil {
-			t.Error("Expected error from MkdirAll, got nil")
-		} else if !strings.Contains(err.Error(), "not a directory") && !strings.Contains(err.Error(), "The system cannot find the path specified") {
-			// Allow for different OS error messages
-			t.Logf("Got error: %v", err)
+		assert.Error(t, err, "Expected error from MkdirAll, got nil")
+		if err != nil {
+			msg := err.Error()
+			isNotDir := strings.Contains(msg, "not a directory") || strings.Contains(msg, "The system cannot find the path specified")
+			assert.True(t, isNotDir, "Got unexpected error message: %v", err)
 		}
 	})
 
-	t.Run("error_open_file", func(t *testing.T) {
+	t.Run("error_create_temp", func(t *testing.T) {
 		tempDir := t.TempDir()
-		path := filepath.Join(tempDir, "metrics.prom")
-		tmpPath := path + ".tmp"
 
-		// Create a directory where the temp file would be written, causing an error
-		if err := os.Mkdir(tmpPath, 0755); err != nil {
-			t.Fatalf("Failed to create conflict dir: %v", err)
-		}
+		// Make dir read-only so CreateTemp fails
+		err := os.Chmod(tempDir, 0555)
+		require.NoError(t, err, "Failed to chmod temp dir")
+
+		// Clean up for other tests
+		defer os.Chmod(tempDir, 0755)
+
+		path := filepath.Join(tempDir, "metrics.prom")
 
 		g := &mockGatherer{mfs: mfs}
-		err := WriteTextfile(path, g)
+		err = WriteTextfile(path, g)
 
-		if err == nil {
-			t.Error("Expected error from OpenFile, got nil")
-		}
+		assert.Error(t, err, "Expected error from CreateTemp, got nil")
 	})
 }
