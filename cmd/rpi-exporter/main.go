@@ -20,15 +20,23 @@ import (
 var version = "dev"
 
 func main() {
-	port            := flag.String("port", ":9101", "Port to listen on")
-	rpi             := flag.Bool("rpi", false, "Check if running on a Raspberry Pi and exit")
-	install         := flag.Bool("install", false, "Install rpi-exporter as a systemd service")
-	uninstall       := flag.Bool("uninstall", false, "Uninstall rpi-exporter systemd service")
-	plugin          := flag.Bool("plugin", false, "Write metrics to textfile collector and exit")
-	textfile        := flag.String("textfile", rpiexporter.TextfilePath, "Textfile collector output path (used with -plugin; use - for stdout)")
-	installPlugin   := flag.Bool("install-plugin", false, "Install rpi-exporter as a systemd timer (textfile plugin)")
-	uninstallPlugin := flag.Bool("uninstall-plugin", false, "Uninstall rpi-exporter systemd timer plugin")
-	flag.Parse()
+	os.Exit(run(os.Args[1:]))
+}
+
+func run(args []string) int {
+	fs := flag.NewFlagSet("rpi-exporter", flag.ContinueOnError)
+	port := fs.String("port", ":9101", "Port to listen on")
+	rpi := fs.Bool("rpi", false, "Check if running on a Raspberry Pi and exit")
+	install := fs.Bool("install", false, "Install rpi-exporter as a systemd service")
+	uninstall := fs.Bool("uninstall", false, "Uninstall rpi-exporter systemd service")
+	plugin := fs.Bool("plugin", false, "Write metrics to textfile collector and exit")
+	textfile := fs.String("textfile", rpiexporter.TextfilePath, "Textfile collector output path (used with -plugin; use - for stdout)")
+	installPlugin := fs.Bool("install-plugin", false, "Install rpi-exporter as a systemd timer (textfile plugin)")
+	uninstallPlugin := fs.Bool("uninstall-plugin", false, "Uninstall rpi-exporter systemd timer plugin")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
 
 	if *rpi {
 		if collector.IsRpi() {
@@ -36,35 +44,39 @@ func main() {
 		} else {
 			slog.Error("Not running on a Raspberry Pi")
 		}
-		return
+		return 0
 	}
 
 	if *install {
 		if err := rpiexporter.Install(); err != nil {
 			slog.Error("Failed to install", "error", err)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	if *uninstall {
 		if err := rpiexporter.Uninstall(); err != nil {
 			slog.Error("Failed to uninstall", "error", err)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	if *installPlugin {
 		if err := rpiexporter.InstallPlugin(); err != nil {
 			slog.Error("Failed to install plugin", "error", err)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	if *uninstallPlugin {
 		if err := rpiexporter.UninstallPlugin(); err != nil {
 			slog.Error("Failed to uninstall plugin", "error", err)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	if *plugin {
@@ -72,17 +84,20 @@ func main() {
 		reg.MustRegister(collector.NewRPiCollector())
 		if err := rpiexporter.WriteTextfile(*textfile, reg); err != nil {
 			slog.Error("Failed to write textfile", "path", *textfile, "error", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collector.NewRPiCollector())
 
-	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	slog.Info("Starting rpi-exporter", "port", *port, "version", version)
-	if err := http.ListenAndServe(*port, nil); err != nil {
+	if err := http.ListenAndServe(*port, mux); err != nil {
 		slog.Error("Failed to start server", "error", err)
+		return 1
 	}
+	return 0
 }
