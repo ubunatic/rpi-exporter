@@ -158,13 +158,14 @@ func GetMemory(id string) (float64, error) {
 	}
 
 	// Example output: arm=512M
-	re := regexp.MustCompile(fmt.Sprintf(`%s=(\d+)M`, regexp.QuoteMeta(id)))
-	matches := re.FindStringSubmatch(output)
-	if len(matches) < 2 {
+	prefix := id + "="
+	if !strings.HasPrefix(output, prefix) || !strings.HasSuffix(output, "M") {
 		return 0, fmt.Errorf("could not parse memory for %s from output: %s", id, output)
 	}
 
-	memStr := matches[1]
+	memStr := strings.TrimPrefix(output, prefix)
+	memStr = strings.TrimSuffix(memStr, "M")
+
 	// Memory is reported in MB, convert to Bytes
 	memMB, err := strconv.ParseFloat(memStr, 64)
 	if err != nil {
