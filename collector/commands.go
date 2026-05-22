@@ -57,141 +57,72 @@ func runVCGenCmd(args ...string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// GetVoltage runs vcgencmd measure_volts for a given port and returns the voltage.
-func GetVoltage(port string) (float64, error) {
-	output, err := runVCGenCmd("measure_volts", port)
+// parseVCGenCmdFloat executes a vcgencmd command, matches output with regex, and parses it.
+func parseVCGenCmdFloat(metricName string, re *regexp.Regexp, parseFunc func(string) (float64, error), args ...string) (float64, error) {
+	output, err := runVCGenCmd(args...)
 	if err != nil {
 		return 0, err
 	}
 
-	// Example output: volt=1.2000V
-	re := regexp.MustCompile(`volt=(\d+\.?\d*)V`)
 	matches := re.FindStringSubmatch(output)
 	if len(matches) < 2 {
-		return 0, fmt.Errorf("could not parse voltage from output: %s", output)
+		return 0, fmt.Errorf("could not parse %s from output: %s", metricName, output)
 	}
 
-	voltageStr := matches[1]
-	voltage, err := strconv.ParseFloat(voltageStr, 64)
+	val, err := parseFunc(matches[1])
 	if err != nil {
-		return 0, fmt.Errorf("could not parse float from voltage string '%s': %w", voltageStr, err)
+		return 0, fmt.Errorf("could not parse %s value '%s': %w", metricName, matches[1], err)
 	}
 
-	return voltage, nil
+	return val, nil
+}
+
+// defaultParseFloat parses a string to a float64
+func defaultParseFloat(s string) (float64, error) {
+	return strconv.ParseFloat(s, 64)
+}
+
+var (
+	voltageRe     = regexp.MustCompile(`volt=(\d+\.?\d*)V`)
+	throttledRe   = regexp.MustCompile(`throttled=(0x[0-9a-fA-F]+)`)
+	temperatureRe = regexp.MustCompile(`temp=(\d+\.?\d*)'C`)
+	clockRe       = regexp.MustCompile(`frequency\(\d+\)=(\d+)`)
+	resetReasonRe = regexp.MustCompile(`get_rsts=(\d+)`)
+)
+
+// GetVoltage runs vcgencmd measure_volts for a given port and returns the voltage.
+func GetVoltage(port string) (float64, error) {
+	return parseVCGenCmdFloat("voltage", voltageRe, defaultParseFloat, "measure_volts", port)
 }
 
 // GetThrottledStatus runs vcgencmd get_throttled and returns the status as a float64.
 func GetThrottledStatus() (float64, error) {
-	output, err := runVCGenCmd("get_throttled")
-	if err != nil {
-		return 0, err
-	}
-
-	// Example output: throttled=0x0
-	re := regexp.MustCompile(`throttled=(0x[0-9a-fA-F]+)`)
-	matches := re.FindStringSubmatch(output)
-	if len(matches) < 2 {
-		return 0, fmt.Errorf("could not parse throttled status from output: %s", output)
-	}
-
-	statusHex := matches[1]
-	// Parse hex string to integer, then convert to float64 for the gauge
-	statusInt, err := strconv.ParseInt(statusHex, 0, 64) // 0 infers base from prefix (0x)
-	if err != nil {
-		return 0, fmt.Errorf("could not parse int from throttled status hex '%s': %w", statusHex, err)
-	}
-
-	return float64(statusInt), nil
+	return parseVCGenCmdFloat("throttled status", throttledRe, func(s string) (float64, error) {
+		statusInt, err := strconv.ParseInt(s, 0, 64)
+		return float64(statusInt), err
+	}, "get_throttled")
 }
 
 // GetTemperature runs vcgencmd measure_temp and returns the temperature in Celsius.
 func GetTemperature() (float64, error) {
-	output, err := runVCGenCmd("measure_temp")
-	if err != nil {
-		return 0, err
-	}
-
-	// Example output: temp=45.0'C
-	re := regexp.MustCompile(`temp=(\d+\.?\d*)'C`)
-	matches := re.FindStringSubmatch(output)
-	if len(matches) < 2 {
-		return 0, fmt.Errorf("could not parse temperature from output: %s", output)
-	}
-
-	tempStr := matches[1]
-	temp, err := strconv.ParseFloat(tempStr, 64)
-	if err != nil {
-		return 0, fmt.Errorf("could not parse float from temperature string '%s': %w", tempStr, err)
-	}
-
-	return temp, nil
+	return parseVCGenCmdFloat("temperature", temperatureRe, defaultParseFloat, "measure_temp")
 }
 
 // GetClock runs vcgencmd measure_clock for a given clock ID and returns the frequency in Hertz.
 func GetClock(id string) (float64, error) {
-	output, err := runVCGenCmd("measure_clock", id)
-	if err != nil {
-		return 0, err
-	}
-
-	// Example output: frequency(48)=900228544
-	re := regexp.MustCompile(`frequency\(\d+\)=(\d+)`)
-	matches := re.FindStringSubmatch(output)
-	if len(matches) < 2 {
-		return 0, fmt.Errorf("could not parse clock frequency for %s from output: %s", id, output)
-	}
-
-	freqStr := matches[1]
-	freq, err := strconv.ParseFloat(freqStr, 64)
-	if err != nil {
-		return 0, fmt.Errorf("could not parse float from frequency string '%s': %w", freqStr, err)
-	}
-
-	return freq, nil
+	return parseVCGenCmdFloat(fmt.Sprintf("clock frequency for %s", id), clockRe, defaultParseFloat, "measure_clock", id)
 }
 
 // GetMemory runs vcgencmd get_mem for a given memory ID and returns the memory in Bytes.
 func GetMemory(id string) (float64, error) {
-	output, err := runVCGenCmd("get_mem", id)
-	if err != nil {
-		return 0, err
-	}
-
-	// Example output: arm=512M
 	re := regexp.MustCompile(fmt.Sprintf(`%s=(\d+)M`, regexp.QuoteMeta(id)))
-	matches := re.FindStringSubmatch(output)
-	if len(matches) < 2 {
-		return 0, fmt.Errorf("could not parse memory for %s from output: %s", id, output)
-	}
-
-	memStr := matches[1]
-	// Memory is reported in MB, convert to Bytes
-	memMB, err := strconv.ParseFloat(memStr, 64)
-	if err != nil {
-		return 0, fmt.Errorf("could not parse float from memory string '%s': %w", memStr, err)
-	}
-
-	return memMB * 1024 * 1024, nil // Convert MB to Bytes
+	return parseVCGenCmdFloat(fmt.Sprintf("memory for %s", id), re, func(s string) (float64, error) {
+		memMB, err := strconv.ParseFloat(s, 64)
+		return memMB * 1024 * 1024, err
+	}, "get_mem", id)
 }
 
 // GetResetReason runs vcgencmd get_rsts and returns the reset reason bitmask.
 func GetResetReason() (float64, error) {
-	output, err := runVCGenCmd("get_rsts")
-	if err != nil {
-		return 0, err
-	}
-
-	// Example output: get_rsts=1000
-	re := regexp.MustCompile(`get_rsts=(\d+)`)
-	matches := re.FindStringSubmatch(output)
-	if len(matches) < 2 {
-		return 0, fmt.Errorf("could not parse reset reason from output: %s", output)
-	}
-
-	v, err := strconv.ParseFloat(matches[1], 64)
-	if err != nil {
-		return 0, fmt.Errorf("could not parse float from reset reason '%s': %w", matches[1], err)
-	}
-
-	return v, nil
+	return parseVCGenCmdFloat("reset reason", resetReasonRe, defaultParseFloat, "get_rsts")
 }
