@@ -1,0 +1,46 @@
+name: Sync with upstream
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync from Codeberg and preserve .github
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # Add upstream and fetch
+          git remote add upstream https://codeberg.org/ubunatic/rpi-exporter.git
+          git fetch upstream main
+          
+          # Save current SHA so we can grab .github from it later
+          CURRENT_SHA=$(git rev-parse HEAD)
+          
+          # Reset hard to upstream
+          git reset --hard upstream/main
+          
+          # Checkout the .github folder from our previous state
+          git checkout $CURRENT_SHA -- .github/
+          
+          # Commit the .github folder if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes in .github directory to commit."
+          else
+            git commit -m "chore: Restore GitHub actions workflow [skip ci]"
+          fi
+          
+          # Force push back to origin main
+          git push origin main --force
