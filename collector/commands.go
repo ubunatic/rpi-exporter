@@ -164,6 +164,7 @@ func GetMemory(id string) (float64, error) {
 	}
 
 	memStr := strings.TrimSuffix(strings.TrimPrefix(output, prefix), "M")
+
 	// Memory is reported in MB, convert to Bytes
 	memMB, err := strconv.ParseFloat(memStr, 64)
 	if err != nil {
