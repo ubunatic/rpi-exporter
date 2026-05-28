@@ -11,6 +11,11 @@ A Prometheus exporter for Raspberry Pi hardware metrics, written in Go. It reads
 
 ## What it does
 
+> **Disclaimer:** metric descriptions and source interpretations are based on empirical
+> observation and community knowledge, not official Broadcom/RPi documentation.
+> What a number actually means is often a best guess — verify against your own hardware
+> if precision matters.
+
 Collects and exposes the following metrics:
 
 | Metric | Source |

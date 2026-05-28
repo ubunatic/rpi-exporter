@@ -21,6 +21,13 @@ A Prometheus exporter for Raspberry Pi hardware metrics via `vcgencmd`.
 | `rpi_gpu_bo_objects` | Number of V3D GPU buffer objects currently allocated |
 | `rpi_gpu_bo_bytes` | Total bytes in V3D GPU buffer objects |
 
+> **Disclaimer:** metric descriptions and source interpretations are based on empirical
+> observation and community knowledge, not official Broadcom/RPi documentation. The
+> "what does this number actually mean" is often a best guess — the CMA story above is
+> a good example where the obvious reading (`vcgencmd get_mem cma`) turned out to be
+> the wrong source for a common configuration. Treat descriptions as working hypotheses
+> and verify against your own hardware if precision matters.
+
 ### `rpi_memory_bytes{id}` label values
 
 | id | Source | Description |
