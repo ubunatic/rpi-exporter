@@ -18,12 +18,14 @@ Collects and exposes the following metrics:
 | `rpi_voltage_volts{port}` | `vcgencmd measure_volts` |
 | `rpi_temperature_celsius` | `vcgencmd measure_temp` |
 | `rpi_clock_frequency_hertz{id}` | `vcgencmd measure_clock` |
-| `rpi_memory_bytes{id}` | `vcgencmd get_mem` + `/proc/meminfo` (CMA) |
+| `rpi_memory_bytes{id}` | `vcgencmd get_mem` (arm, gpu, malloc, malloc_total, reloc, reloc_total, cma, cma_total) + `/proc/meminfo` (cma_reserved, cma_free) |
 | `rpi_throttled_status` | `vcgencmd get_throttled` (raw bitmask) |
 | `rpi_throttled{condition,period}` | same, expanded per-bit |
 | `rpi_reset_reason` | `vcgencmd get_rsts` |
 | `rpi_gpu_reloc_total{event}` | `vcgencmd mem_reloc_stats` |
 | `rpi_gpu_oom_*` | `vcgencmd mem_oom` |
+| `rpi_gpu_bo_objects` | `/sys/kernel/debug/dri/0/bo_stats` |
+| `rpi_gpu_bo_bytes` | `/sys/kernel/debug/dri/0/bo_stats` |
 
 ## Main components
 
