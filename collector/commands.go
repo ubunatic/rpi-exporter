@@ -211,6 +211,37 @@ func GetCMAFromProcMeminfo() (reserved, free float64, err error) {
 	return reserved, free, nil
 }
 
+// v3dBoStatsPath is the debugfs path for V3D GPU buffer object statistics.
+const v3dBoStatsPath = "/sys/kernel/debug/dri/0/bo_stats"
+
+// GetV3DBoStats reads the V3D DRM debugfs bo_stats file and returns the count and
+// total size in bytes of currently allocated GPU buffer objects.
+func GetV3DBoStats() (objects, bytes float64, err error) {
+	data, err := os.ReadFile(v3dBoStatsPath)
+	if err != nil {
+		return 0, 0, fmt.Errorf("cannot read %s: %w", v3dBoStatsPath, err)
+	}
+	s := string(data)
+	extract := func(prefix string) (float64, error) {
+		re := regexp.MustCompile(`(?m)^` + prefix + `[^0-9]*(\d+)`)
+		m := re.FindStringSubmatch(s)
+		if len(m) < 2 {
+			return 0, fmt.Errorf("%q not found in %s", prefix, v3dBoStatsPath)
+		}
+		return strconv.ParseFloat(m[1], 64)
+	}
+
+	objects, err = extract("allocated bos")
+	if err != nil {
+		return 0, 0, err
+	}
+	kb, err := extract("allocated bo size")
+	if err != nil {
+		return 0, 0, err
+	}
+	return objects, kb * 1024, nil
+}
+
 // MemRelocStats holds VideoCore relocatable heap statistics from vcgencmd mem_reloc_stats.
 type MemRelocStats struct {
 	AllocFailures    float64

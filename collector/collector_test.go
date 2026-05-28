@@ -54,6 +54,8 @@ func TestCollector_AllFamiliesPresent(t *testing.T) {
 		"rpi_gpu_oom_lifetime_bytes",
 		"rpi_gpu_oom_handler_seconds_total",
 		"rpi_gpu_oom_handler_max_seconds",
+		"rpi_gpu_bo_objects",
+		"rpi_gpu_bo_bytes",
 	}
 	for _, name := range expected {
 		require.Contains(t, families, name, "missing metric family: %s", name)
@@ -139,6 +141,16 @@ func TestCollector_GPUReloc(t *testing.T) {
 
 	events := labelValues(metrics, "event")
 	require.ElementsMatch(t, []string{"alloc_failures", "compactions", "legacy_block_fails"}, events)
+}
+
+func TestCollector_V3DBoStats(t *testing.T) {
+	families := gatherMetrics(t)
+
+	for _, name := range []string{"rpi_gpu_bo_objects", "rpi_gpu_bo_bytes"} {
+		m := families[name].GetMetric()
+		require.Len(t, m, 1, "expected 1 metric for %s", name)
+		require.GreaterOrEqual(t, m[0].GetGauge().GetValue(), 0.0)
+	}
 }
 
 func TestCollector_GPUOOM(t *testing.T) {

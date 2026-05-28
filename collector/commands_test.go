@@ -69,6 +69,13 @@ func TestCommands(t *testing.T) {
 		require.GreaterOrEqual(t, stats.LegacyBlockFails, 0.0)
 	})
 
+	t.Run("V3DBoStats", func(t *testing.T) {
+		objects, bytes, err := collector.GetV3DBoStats()
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, objects, 0.0)
+		require.GreaterOrEqual(t, bytes, 0.0)
+	})
+
 	t.Run("MemOOM", func(t *testing.T) {
 		stats, err := collector.GetMemOOM()
 		require.NoError(t, err)

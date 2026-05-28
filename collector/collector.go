@@ -27,6 +27,8 @@ const (
 	MemIDVCCMATotal  = "cma_total"
 	MemIDCMAReserved = "cma_reserved"
 	MemIDCMAFree     = "cma_free"
+	MemIDReloc       = "reloc"
+	MemIDRelocTotal  = "reloc_total"
 )
 
 func VoltagePorts() []string {
@@ -39,7 +41,7 @@ func ClockIDs() []string {
 
 // MemIDs returns memory IDs fetched via vcgencmd get_mem.
 func MemIDs() []string {
-	return []string{MemIDARM, MemIDGPU, MemIDMalloc, MemIDMallocTotal, MemIDVCCMA, MemIDVCCMATotal}
+	return []string{MemIDARM, MemIDGPU, MemIDMalloc, MemIDMallocTotal, MemIDVCCMA, MemIDVCCMATotal, MemIDReloc, MemIDRelocTotal}
 }
 
 // AllMemIDs returns all rpi_memory_bytes label IDs including procfs-sourced ones.
@@ -128,6 +130,16 @@ var (
 		"Maximum time spent in a single VideoCore GPU OOM handler invocation.",
 		nil, nil,
 	)
+	gpuBOObjectsDesc = prometheus.NewDesc(
+		"rpi_gpu_bo_objects",
+		"Number of V3D GPU buffer objects currently allocated.",
+		nil, nil,
+	)
+	gpuBOBytesDesc = prometheus.NewDesc(
+		"rpi_gpu_bo_bytes",
+		"Total bytes allocated in V3D GPU buffer objects.",
+		nil, nil,
+	)
 )
 
 type RPiCollector struct{}
@@ -148,6 +160,8 @@ func (c *RPiCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- gpuOOMBytesDesc
 	ch <- gpuOOMHandlerSecsDesc
 	ch <- gpuOOMHandlerMaxSecsDesc
+	ch <- gpuBOObjectsDesc
+	ch <- gpuBOBytesDesc
 }
 
 // Collect implements the prometheus.Collector interface.
@@ -218,6 +232,13 @@ func (c *RPiCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(gpuOOMBytesDesc, prometheus.CounterValue, stats.LifetimeMB*1024*1024)
 		ch <- prometheus.MustNewConstMetric(gpuOOMHandlerSecsDesc, prometheus.CounterValue, stats.TotalTimeMS/1000)
 		ch <- prometheus.MustNewConstMetric(gpuOOMHandlerMaxSecsDesc, prometheus.GaugeValue, stats.MaxTimeMS/1000)
+	}
+
+	if objects, bytes, err := GetV3DBoStats(); err != nil {
+		slog.Error("Error collecting V3D BO stats", "error", err)
+	} else {
+		ch <- prometheus.MustNewConstMetric(gpuBOObjectsDesc, prometheus.GaugeValue, objects)
+		ch <- prometheus.MustNewConstMetric(gpuBOBytesDesc, prometheus.GaugeValue, bytes)
 	}
 
 	if reason, err := GetResetReason(); err != nil {
