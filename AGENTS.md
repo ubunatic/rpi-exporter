@@ -1,9 +1,5 @@
 Adhere to the following conventions.
 
-## Development Scripts
-
-Run from project root.
-
 <!-- claudeconfig:begin Project Summary -->
 # rpi-exporter
 
@@ -11,10 +7,7 @@ A Prometheus exporter for Raspberry Pi hardware metrics, written in Go. It reads
 
 ## What it does
 
-> **Disclaimer:** metric descriptions and source interpretations are based on empirical
-> observation and community knowledge, not official Broadcom/RPi documentation.
-> What a number actually means is often a best guess — verify against your own hardware
-> if precision matters.
+
 
 Collects and exposes the following metrics:
 
@@ -71,3 +64,14 @@ Fake `vcgencmd` binary for local development. `make test` builds it to `bin/` an
 - `vcgencmd` calls are serialized — do not call `runVCGenCmd` concurrently.
 - Plugin mode and server mode share the same `RPiCollector`; behavior is controlled entirely by flags in `main.go`.
 <!-- claudeconfig:end Project Summary -->
+
+## Development Scripts
+
+Run from project root.
+
+> **Disclaimer:** metric descriptions and source interpretations are based on empirical
+> observation and community knowledge, not official Broadcom/RPi documentation.
+> What a number actually means is often a best guess — verify against your own hardware
+> if precision matters.
+
+
