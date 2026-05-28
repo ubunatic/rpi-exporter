@@ -40,14 +40,43 @@ func TestCommands(t *testing.T) {
 		})
 	}
 
-	// Test GetMemory for all IDs
+	// Test GetMemory for all IDs; VideoCore CMA values may be 0 if not VC-managed.
+	zeroable := map[string]bool{collector.MemIDVCCMA: true, collector.MemIDVCCMATotal: true}
 	for _, id := range collector.MemIDs() {
 		t.Run("Memory_"+id, func(t *testing.T) {
 			mem, err := collector.GetMemory(id)
 			require.NoError(t, err)
-			require.Greater(t, mem, 0.0) // Memory should be non-negative
+			if zeroable[id] {
+				require.GreaterOrEqual(t, mem, 0.0)
+			} else {
+				require.Greater(t, mem, 0.0)
+			}
 		})
 	}
+
+	t.Run("CMAFromProcMeminfo", func(t *testing.T) {
+		reserved, free, err := collector.GetCMAFromProcMeminfo()
+		require.NoError(t, err)
+		require.Greater(t, reserved, 0.0)
+		require.GreaterOrEqual(t, free, 0.0)
+	})
+
+	t.Run("MemRelocStats", func(t *testing.T) {
+		stats, err := collector.GetMemRelocStats()
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, stats.AllocFailures, 0.0)
+		require.GreaterOrEqual(t, stats.Compactions, 0.0)
+		require.GreaterOrEqual(t, stats.LegacyBlockFails, 0.0)
+	})
+
+	t.Run("MemOOM", func(t *testing.T) {
+		stats, err := collector.GetMemOOM()
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, stats.Events, 0.0)
+		require.GreaterOrEqual(t, stats.LifetimeMB, 0.0)
+		require.GreaterOrEqual(t, stats.TotalTimeMS, 0.0)
+		require.GreaterOrEqual(t, stats.MaxTimeMS, 0.0)
+	})
 }
 
 func TestIsRpi(t *testing.T) {

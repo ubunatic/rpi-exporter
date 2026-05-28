@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -50,7 +51,11 @@ func runVCGenCmd(args ...string) (string, error) {
 	cmd := exec.Command("vcgencmd", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		slog.Error("failed to run vcgencmd", "args", args, "error", err)
+		stderr := ""
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = string(ee.Stderr)
+		}
+		slog.Error("failed to run vcgencmd", "args", args, "error", err, "stderr", stderr)
 		return "", errors.New("vcgencmd error")
 	}
 
@@ -172,6 +177,107 @@ func GetMemory(id string) (float64, error) {
 	}
 
 	return memMB * 1024 * 1024, nil // Convert MB to Bytes
+}
+
+// GetCMAFromProcMeminfo reads /proc/meminfo and returns CmaTotal and CmaFree in bytes.
+// This reflects kernel CMA (e.g. reserved via dtoverlay=vc4-kms-v3d,cma-512), not VideoCore-managed CMA.
+func GetCMAFromProcMeminfo() (reserved, free float64, err error) {
+	data, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0, 0, fmt.Errorf("cannot read /proc/meminfo: %w", err)
+	}
+	s := string(data)
+	extract := func(key string) (float64, error) {
+		re := regexp.MustCompile(key + `:\s+(\d+)\s+kB`)
+		m := re.FindStringSubmatch(s)
+		if len(m) < 2 {
+			return 0, fmt.Errorf("%s not found in /proc/meminfo", key)
+		}
+		kb, err := strconv.ParseFloat(m[1], 64)
+		if err != nil {
+			return 0, err
+		}
+		return kb * 1024, nil
+	}
+
+	reserved, err = extract("CmaTotal")
+	if err != nil {
+		return 0, 0, err
+	}
+	free, err = extract("CmaFree")
+	if err != nil {
+		return 0, 0, err
+	}
+	return reserved, free, nil
+}
+
+// MemRelocStats holds VideoCore relocatable heap statistics from vcgencmd mem_reloc_stats.
+type MemRelocStats struct {
+	AllocFailures    float64
+	Compactions      float64
+	LegacyBlockFails float64
+}
+
+// GetMemRelocStats runs vcgencmd mem_reloc_stats and returns parsed statistics.
+func GetMemRelocStats() (MemRelocStats, error) {
+	output, err := runVCGenCmd("mem_reloc_stats")
+	if err != nil {
+		return MemRelocStats{}, err
+	}
+	reNum := regexp.MustCompile(`(\d+)`)
+	var stats MemRelocStats
+	for _, line := range strings.Split(output, "\n") {
+		m := reNum.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		val, _ := strconv.ParseFloat(m[1], 64)
+		switch {
+		case strings.Contains(line, "alloc failures"):
+			stats.AllocFailures = val
+		case strings.Contains(line, "compactions"):
+			stats.Compactions = val
+		case strings.Contains(line, "legacy block fails"):
+			stats.LegacyBlockFails = val
+		}
+	}
+	return stats, nil
+}
+
+// MemOOMStats holds VideoCore OOM statistics from vcgencmd mem_oom.
+type MemOOMStats struct {
+	Events      float64
+	LifetimeMB  float64
+	TotalTimeMS float64
+	MaxTimeMS   float64
+}
+
+// GetMemOOM runs vcgencmd mem_oom and returns parsed statistics.
+func GetMemOOM() (MemOOMStats, error) {
+	output, err := runVCGenCmd("mem_oom")
+	if err != nil {
+		return MemOOMStats{}, err
+	}
+	reNum := regexp.MustCompile(`(\d+)`)
+	var stats MemOOMStats
+	for _, line := range strings.Split(output, "\n") {
+		m := reNum.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		val, _ := strconv.ParseFloat(m[1], 64)
+		switch {
+		case strings.HasPrefix(strings.TrimSpace(line), "oom events"):
+			stats.Events = val
+		case strings.Contains(line, "lifetime oom required"):
+			stats.LifetimeMB = val
+		case strings.HasPrefix(strings.TrimSpace(line), "total time"):
+			stats.TotalTimeMS = val
+		case strings.HasPrefix(strings.TrimSpace(line), "max time"):
+			stats.MaxTimeMS = val
+		}
+	}
+	return stats, nil
 }
 
 // GetResetReason runs vcgencmd get_rsts and returns the reset reason bitmask.

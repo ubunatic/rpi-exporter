@@ -33,6 +33,15 @@ func main() {
 		fmt.Printf("%s=512M\n", id)
 	case "get_rsts":
 		fmt.Println("get_rsts=1")
+	case "mem_reloc_stats":
+		fmt.Println("alloc failures:     0")
+		fmt.Println("compactions:        0")
+		fmt.Println("legacy block fails: 0")
+	case "mem_oom":
+		fmt.Println("oom events: 0")
+		fmt.Println("lifetime oom required: 0 Mbytes")
+		fmt.Println("total time in oom handler: 0 ms")
+		fmt.Println("max time spent in oom handler: 0 ms")
 	default:
 		fmt.Fprintf(os.Stderr, "vcgencmd-stub: unknown command: %s\n", os.Args[1])
 		os.Exit(1)

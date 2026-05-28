@@ -49,6 +49,11 @@ func TestCollector_AllFamiliesPresent(t *testing.T) {
 		"rpi_temperature_celsius",
 		"rpi_clock_frequency_hertz",
 		"rpi_memory_bytes",
+		"rpi_gpu_reloc_total",
+		"rpi_gpu_oom_events_total",
+		"rpi_gpu_oom_lifetime_bytes",
+		"rpi_gpu_oom_handler_seconds_total",
+		"rpi_gpu_oom_handler_max_seconds",
 	}
 	for _, name := range expected {
 		require.Contains(t, families, name, "missing metric family: %s", name)
@@ -103,12 +108,50 @@ func TestCollector_Memory(t *testing.T) {
 	families := gatherMetrics(t)
 
 	metrics := families["rpi_memory_bytes"].GetMetric()
-	require.Len(t, metrics, len(collector.MemIDs()))
+	require.Len(t, metrics, len(collector.AllMemIDs()))
 
 	ids := labelValues(metrics, "id")
-	require.ElementsMatch(t, collector.MemIDs(), ids)
+	require.ElementsMatch(t, collector.AllMemIDs(), ids)
 
+	// VideoCore CMA may be 0 when not VC-managed; all others must be positive.
+	zeroable := map[string]bool{collector.MemIDVCCMA: true, collector.MemIDVCCMATotal: true}
 	for _, m := range metrics {
-		require.Greater(t, m.GetGauge().GetValue(), 0.0, "memory must be > 0")
+		val := m.GetGauge().GetValue()
+		id := ""
+		for _, lp := range m.GetLabel() {
+			if lp.GetName() == "id" {
+				id = lp.GetValue()
+			}
+		}
+		if zeroable[id] {
+			require.GreaterOrEqual(t, val, 0.0, "memory id=%s must be >= 0", id)
+		} else {
+			require.Greater(t, val, 0.0, "memory id=%s must be > 0", id)
+		}
+	}
+}
+
+func TestCollector_GPUReloc(t *testing.T) {
+	families := gatherMetrics(t)
+
+	metrics := families["rpi_gpu_reloc_total"].GetMetric()
+	require.Len(t, metrics, 3)
+
+	events := labelValues(metrics, "event")
+	require.ElementsMatch(t, []string{"alloc_failures", "compactions", "legacy_block_fails"}, events)
+}
+
+func TestCollector_GPUOOM(t *testing.T) {
+	families := gatherMetrics(t)
+
+	for _, name := range []string{
+		"rpi_gpu_oom_events_total",
+		"rpi_gpu_oom_lifetime_bytes",
+		"rpi_gpu_oom_handler_seconds_total",
+		"rpi_gpu_oom_handler_max_seconds",
+	} {
+		m := families[name].GetMetric()
+		require.Len(t, m, 1, "expected 1 metric for %s", name)
+		require.GreaterOrEqual(t, m[0].GetGauge().GetValue()+m[0].GetCounter().GetValue(), 0.0)
 	}
 }

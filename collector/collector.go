@@ -19,8 +19,14 @@ const (
 	ClockIDARM  = "arm"
 	ClockIDCore = "core"
 
-	MemIDARM = "arm"
-	MemIDGPU = "gpu"
+	MemIDARM         = "arm"
+	MemIDGPU         = "gpu"
+	MemIDMalloc      = "malloc"
+	MemIDMallocTotal = "malloc_total"
+	MemIDVCCMA       = "cma"
+	MemIDVCCMATotal  = "cma_total"
+	MemIDCMAReserved = "cma_reserved"
+	MemIDCMAFree     = "cma_free"
 )
 
 func VoltagePorts() []string {
@@ -31,7 +37,15 @@ func ClockIDs() []string {
 	return []string{ClockIDARM, ClockIDCore, "v3d", "isp", "h264", "pixel", "uart"}
 }
 
-func MemIDs() []string { return []string{MemIDARM, MemIDGPU} }
+// MemIDs returns memory IDs fetched via vcgencmd get_mem.
+func MemIDs() []string {
+	return []string{MemIDARM, MemIDGPU, MemIDMalloc, MemIDMallocTotal, MemIDVCCMA, MemIDVCCMATotal}
+}
+
+// AllMemIDs returns all rpi_memory_bytes label IDs including procfs-sourced ones.
+func AllMemIDs() []string {
+	return append(MemIDs(), MemIDCMAReserved, MemIDCMAFree)
+}
 
 // throttledBit maps a bitmask position to its Prometheus labels.
 type throttledBit struct {
@@ -89,6 +103,31 @@ var (
 		"Raspberry Pi reset reason bitmask (vcgencmd get_rsts).",
 		nil, nil,
 	)
+	gpuRelocDesc = prometheus.NewDesc(
+		"rpi_gpu_reloc_total",
+		"VideoCore GPU relocatable heap event counts since boot.",
+		[]string{"event"}, nil,
+	)
+	gpuOOMEventsDesc = prometheus.NewDesc(
+		"rpi_gpu_oom_events_total",
+		"Total VideoCore GPU out-of-memory events since boot.",
+		nil, nil,
+	)
+	gpuOOMBytesDesc = prometheus.NewDesc(
+		"rpi_gpu_oom_lifetime_bytes",
+		"Total VideoCore GPU memory required during OOM events since boot.",
+		nil, nil,
+	)
+	gpuOOMHandlerSecsDesc = prometheus.NewDesc(
+		"rpi_gpu_oom_handler_seconds_total",
+		"Total time spent in VideoCore GPU OOM handler since boot.",
+		nil, nil,
+	)
+	gpuOOMHandlerMaxSecsDesc = prometheus.NewDesc(
+		"rpi_gpu_oom_handler_max_seconds",
+		"Maximum time spent in a single VideoCore GPU OOM handler invocation.",
+		nil, nil,
+	)
 )
 
 type RPiCollector struct{}
@@ -104,6 +143,11 @@ func (c *RPiCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- clockDesc
 	ch <- memoryDesc
 	ch <- resetReasonDesc
+	ch <- gpuRelocDesc
+	ch <- gpuOOMEventsDesc
+	ch <- gpuOOMBytesDesc
+	ch <- gpuOOMHandlerSecsDesc
+	ch <- gpuOOMHandlerMaxSecsDesc
 }
 
 // Collect implements the prometheus.Collector interface.
@@ -150,6 +194,30 @@ func (c *RPiCollector) Collect(ch chan<- prometheus.Metric) {
 			continue
 		}
 		ch <- prometheus.MustNewConstMetric(memoryDesc, prometheus.GaugeValue, mem, id)
+	}
+
+	if reserved, free, err := GetCMAFromProcMeminfo(); err != nil {
+		slog.Error("Error collecting CMA from procfs", "error", err)
+	} else {
+		ch <- prometheus.MustNewConstMetric(memoryDesc, prometheus.GaugeValue, reserved, MemIDCMAReserved)
+		ch <- prometheus.MustNewConstMetric(memoryDesc, prometheus.GaugeValue, free, MemIDCMAFree)
+	}
+
+	if stats, err := GetMemRelocStats(); err != nil {
+		slog.Error("Error collecting GPU reloc stats", "error", err)
+	} else {
+		ch <- prometheus.MustNewConstMetric(gpuRelocDesc, prometheus.CounterValue, stats.AllocFailures, "alloc_failures")
+		ch <- prometheus.MustNewConstMetric(gpuRelocDesc, prometheus.CounterValue, stats.Compactions, "compactions")
+		ch <- prometheus.MustNewConstMetric(gpuRelocDesc, prometheus.CounterValue, stats.LegacyBlockFails, "legacy_block_fails")
+	}
+
+	if stats, err := GetMemOOM(); err != nil {
+		slog.Error("Error collecting GPU OOM stats", "error", err)
+	} else {
+		ch <- prometheus.MustNewConstMetric(gpuOOMEventsDesc, prometheus.CounterValue, stats.Events)
+		ch <- prometheus.MustNewConstMetric(gpuOOMBytesDesc, prometheus.CounterValue, stats.LifetimeMB*1024*1024)
+		ch <- prometheus.MustNewConstMetric(gpuOOMHandlerSecsDesc, prometheus.CounterValue, stats.TotalTimeMS/1000)
+		ch <- prometheus.MustNewConstMetric(gpuOOMHandlerMaxSecsDesc, prometheus.GaugeValue, stats.MaxTimeMS/1000)
 	}
 
 	if reason, err := GetResetReason(); err != nil {
