@@ -3,75 +3,58 @@ Adhere to the following conventions.
 <!-- claudeconfig:begin Project Summary -->
 # rpi-exporter
 
-A Prometheus exporter for Raspberry Pi hardware metrics, written in Go. It reads hardware state by shelling out to `vcgencmd` (the Raspberry Pi firmware query tool) and exposes the results as Prometheus metrics.
+A Prometheus exporter for Raspberry Pi hardware metrics, written in Go 1.23+. Collects voltage, temperature, clock frequencies, memory, throttling status, GPU buffer object stats, and OOM events. Exposes metrics via HTTP or writes them to a node_exporter textfile.
 
-## What it does
+## Data Sources
 
+- `vcgencmd` — primary source for most hardware metrics
+- `/proc/meminfo` — CMA memory
+- `/sys/kernel/debug/dri/0/bo_stats` — GPU buffer object stats (requires root + debugfs)
 
+## Main Components
 
-Collects and exposes the following metrics:
-
-| Metric | Source |
+| File | Role |
 |---|---|
-| `rpi_voltage_volts{port}` | `vcgencmd measure_volts` |
-| `rpi_temperature_celsius` | `vcgencmd measure_temp` |
-| `rpi_clock_frequency_hertz{id}` | `vcgencmd measure_clock` |
-| `rpi_memory_bytes{id}` | `vcgencmd get_mem` (arm, gpu, malloc, malloc_total, reloc, reloc_total, cma, cma_total) + `/proc/meminfo` (cma_reserved, cma_free) |
-| `rpi_throttled_status` | `vcgencmd get_throttled` (raw bitmask) |
-| `rpi_throttled{condition,period}` | same, expanded per-bit |
-| `rpi_reset_reason` | `vcgencmd get_rsts` |
-| `rpi_gpu_reloc_total{event}` | `vcgencmd mem_reloc_stats` |
-| `rpi_gpu_oom_*` | `vcgencmd mem_oom` |
-| `rpi_gpu_bo_objects` | `/sys/kernel/debug/dri/0/bo_stats` |
-| `rpi_gpu_bo_bytes` | `/sys/kernel/debug/dri/0/bo_stats` |
+| `collector/commands.go` | All data acquisition. Each `Get*()` calls `runVCGenCmd()` or reads a system file, returns parsed `float64`. `systemLock` (`sync.Mutex`) serializes all `vcgencmd` calls. `IsRpi()` detects vcgencmd on PATH via `sync.Once`. |
+| `collector/collector.go` | Implements `prometheus.Collector`. Declares all `*Desc` vars, wires them to `Get*()` in `Describe()` and `Collect()`. Per-metric errors are logged and skipped — never abort collection. |
+| `collector/commands_test.go` / `collector/collector_test.go` | Tests run against the stub binary; no mocking. |
+| `cmd/rpi-exporter/main.go` | Entry point. Parses flags, dispatches to HTTP server (default), textfile plugin mode (`-plugin`), or install/uninstall. |
+| `cmd/vcgencmd-stub/main.go` | Fake `vcgencmd` with hardcoded realistic output for every subcommand. Built to `bin/vcgencmd` by `make build-stub`; prepended to PATH during `make test`. |
+| `textfile.go` | `WriteTextfile(path, gatherer)` atomically writes metrics to a `.prom` file via `.tmp` rename; path `"-"` writes to stdout. |
+| `install.go` | Copies binary to `/usr/local/bin/rpi-exporter`, installs embedded systemd units via `systemctl`. |
 
-## Main components
+## Key Conventions
 
-### `cmd/rpi-exporter/main.go`
-Entry point. Parses flags and dispatches to one of three modes:
-- **HTTP server** (default): serves `/metrics` on `:9101`
-- **Plugin mode** (`-plugin`): gathers metrics once, writes to a `.prom` file for `node_exporter`'s textfile collector, then exits
-- **Install/uninstall** (`-install`, `-install-plugin`, etc.): self-installs as a systemd service or timer
+**Adding a metric requires four coordinated changes:**
+1. Add `Get*()` in `collector/commands.go`
+2. Add stub case in `cmd/vcgencmd-stub/main.go`
+3. Add `*Desc` var + `Describe()` + `Collect()` entries in `collector/collector.go`
+4. Add tests in both test files
 
-### `collector/` package
-- **`commands.go`**: all `vcgencmd` interaction. Each metric has a dedicated `Get*()` function that runs the command and parses its output via regex. A `sync.Mutex` (`systemLock`) serializes all `vcgencmd` calls. `IsRpi()` (checked once via `sync.Once`) gates all command execution.
-- **`collector.go`**: implements `prometheus.Collector`. `Describe()` registers all metric descriptors; `Collect()` calls the `Get*()` functions and emits metrics. Per-metric errors are logged and skipped rather than failing the whole collection.
+**Testing:** always `make test` — builds the stub and injects it into PATH. Never mock. Use `make test-uploads` to compile, SCP to Pi, and run tests on real hardware.
 
-### `textfile.go`
-`WriteTextfile(path, gatherer)`: writes Prometheus text-format metrics atomically (write to `.tmp`, then rename). Used for plugin mode.
+**Metric types:** voltages, temperatures, memory, clocks, GPU BO counts → `GaugeValue`; event counts, OOM totals → `CounterValue`.
 
-### `install.go`
-Self-installation logic. Reads the current executable and copies it to `/usr/local/bin/rpi-exporter`, then writes embedded systemd unit files and runs `systemctl`. Two install modes: standalone service and textfile plugin timer (runs every 30s).
+**Unit conversions** happen in the collector layer: `GetMemory()` returns bytes (converts from MB); `GetMemOOM()` returns raw values; collector converts to seconds/bytes.
 
-### `cmd/vcgencmd-stub/`
-Fake `vcgencmd` binary for local development. `make test` builds it to `bin/` and prepends that to `PATH` before running tests, so the test suite runs on any machine.
+**No global Prometheus registry** — always `prometheus.NewRegistry()`.
 
-## Key conventions
+**Do not call `runVCGenCmd` concurrently** — serialized via `systemLock`.
 
-- **Module path**: `ubunatic.com/rpi-exporter`
-- **License**: AGPL-3.0-or-later; all source files carry SPDX headers. REUSE-compliant (`reuse lint`).
-- **Go version**: 1.23+
-- **No comments on obvious code** — only non-obvious constraints are documented.
-- **All scripts run from project root** (per CLAUDE.md).
-- **Cross-compilation**: `make build` targets `GOARCH=arm64 GOOS=linux`. Development happens on x86 or a Pi400; tests run locally via the stub, then on-device via `make test-uploads`.
-- **Default deploy target**: `RPI_HOST=pi400`, `RPI_USER=uwe` (overridable).
+**Cross-compilation:** `make build` targets `GOARCH=arm64 GOOS=linux`. Dev workflow: build → SCP → run on Pi.
 
-## Before making changes
+**License:** AGPL-3.0-or-later; all files carry SPDX headers. Check with `make reuse`.
 
-- `make test` — runs locally using the `vcgencmd` stub; fast, no Pi required.
-- `make test-uploads` — compiles, uploads via SCP, and runs tests on the actual Pi.
-- Adding a new metric requires: a `Get*()` function in `commands.go`, a stub case in `cmd/vcgencmd-stub/main.go`, a `*Desc` var and `Describe`/`Collect` entries in `collector.go`, and a test case in `commands_test.go`.
-- `vcgencmd` calls are serialized — do not call `runVCGenCmd` concurrently.
-- Plugin mode and server mode share the same `RPiCollector`; behavior is controlled entirely by flags in `main.go`.
+**Disclaimer:** metric descriptions are based on empirical observation and community knowledge, not official Broadcom/RPi documentation.
 <!-- claudeconfig:end Project Summary -->
 
 ## Development Scripts
 
 Run from project root.
 
-> **Disclaimer:** metric descriptions and source interpretations are based on empirical
-> observation and community knowledge, not official Broadcom/RPi documentation.
-> What a number actually means is often a best guess — verify against your own hardware
-> if precision matters.
+## Important Notes
 
-
+**Disclaimer:** metric descriptions and source interpretations are based on empirical
+observation and community knowledge, not official Broadcom/RPi documentation.
+What a number actually means is often a best guess — verify against your own hardware
+if precision matters.
